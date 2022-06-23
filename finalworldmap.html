@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html>
+<meta charset="utf-8">
+<style>
+body {
+  background-color: #FFFFFF;
+  min-height: 100%;
+  font-family: "Arial", sans-serif;
+}
+
+h1 {
+  margin: 0;
+  font-size: 18px;
+  text-align: center;
+}
+
+p {
+  margin: 0;
+  font-size: 14px;
+  text-align: center;
+}
+
+.map {
+  padding: 6px;
+  background-color: #FFFFFF;
+  border: 3px solid #FFFFFF;
+}
+
+div.tooltip {
+  position: absolute;
+  padding: 7px;
+  font-size: 0.8em;
+  pointer-events: none;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-shadow: 3px 3px 10px 0px rgba(0, 0, 0, 0.25);
+}
+
+.background {
+  fill: transparent;
+  pointer-events: all;
+}
+
+.world {
+  transform-origin: center;
+}
+
+.center {
+margin: auto;
+width: 60%;
+border: 3px solid #FFFFFF;
+padding: 15px;
+}
+</style>
+
+<body>
+<script src="https://d3js.org/d3.v4.js"></script>
+<script src="https://d3js.org/d3-scale-chromatic.v1.min.js"></script>
+<script src="https://d3js.org/d3-geo-projection.v2.min.js"></script>
+
+<div class="center"; class="map">
+  <h1> Murdering a journalist when they are reporting on an armed conflict is a war crime. How many have there been since 1992?</h1>
+  <p> The Geneva Conventions and their Additional Protocols are international humanitarian laws limiting the barbarity of war. Journalists are considered civilians under these laws and are therefore protected persons. Deliberately attacking them is a war crime. The map shows the number of journalist murders committed since 1992 that could constitute as a violation of the Geneva Conventions. Hover over a country to find out how many.  </p>
+  <svg id="my_dataviz" width="800" height="450"></svg></div>
+
+<script>
+  // initial setup
+  const svg = d3.select("svg"),
+  	width = svg.attr("width"),
+  	height = svg.attr("height"),
+  	path = d3.geoPath(),
+  	data = d3.map(),
+  	worldmap = "https://raw.githubusercontent.com/holtzy/D3-graph-gallery/master/DATA/world.geojson",
+  	worldviolations = "https://raw.githubusercontent.com/meikeeijsberg/FinalProjectData/main/worldmapviolationsdata.csv";
+
+  let centered, world;
+
+  // style of geographic projection and scaling
+  const projection = d3.geoRobinson()
+  	.scale(130)
+  	.translate([width / 2, height / 2]);
+
+  // Define color scale
+  const colorScale = d3.scaleThreshold()
+    .domain([1, 2, 4, 6, 8, 10, 15])
+    .range(["#e0e0e0", "#6fdef0", "#59caed", "#4ba8c9", "#2989bd", "#0a6aad", "#254b8c"]);
+
+  // add tooltip
+  const tooltip = d3.select("body").append("div")
+  	.attr("class", "tooltip")
+  	.style("opacity", 0);
+
+  // Load external data and boot
+  d3.queue()
+  	.defer(d3.json, worldmap)
+  	.defer(d3.csv, worldviolations, function(d) {
+  		data.set(d.code, +d.violations);
+  	})
+  	.await(ready);
+
+
+  // ----------------------------
+  //Start of Choropleth drawing
+  // ----------------------------
+
+  function ready(error, topo) {
+  	// topo is the data received from the d3.queue function (the world.geojson)
+
+  	let mouseOver = function(d) {
+  		d3.selectAll(".Country")
+  			.transition()
+  			.duration(200)
+  			.style("opacity", .5)
+        .style("stroke","black")
+        .style("stroke-width",0.25);
+  		d3.select(this)
+  			.transition()
+  			.duration(200)
+  			.style("opacity", 1)
+  			.style("stroke", "black");
+  		tooltip.style("left", (d3.event.pageX + 15) + "px")
+  			.style("top", (d3.event.pageY - 28) + "px")
+  			.transition().duration(400)
+  			.style("opacity", 1)
+  			.text(d.properties.name +  ': There has/have been ' + d.total + ' murder(s) of journalists that could violate the Geneva Conventions.');
+  	}
+
+  	let mouseLeave = function() {
+  		d3.selectAll(".Country")
+  			.transition()
+  			.duration(200)
+  			.style("opacity", 1)
+        .style("stroke","black")
+        .style("stroke-width",0.25);
+  		tooltip.transition().duration(300)
+  			.style("opacity", 0);
+  	}
+
+  	// Draw the map
+  	world = svg.append("g")
+      .attr("class", "world");
+  	world.selectAll("path")
+  		.data(topo.features)
+  		.enter()
+  		.append("path")
+  		// draw each country
+  		// d3.geoPath() is a built-in function of d3 v4 and takes care of showing the map from a properly formatted geojson file, if necessary filtering it through a predefined geographic projection
+  		.attr("d", d3.geoPath().projection(projection))
+
+  		//retrieve the name of the country from data
+  		.attr("data-name", function(d) {
+  			return d.properties.name
+  		})
+
+  		// set the color of each country
+  		.attr("fill", function(d) {
+  			d.total = data.get(d.id) || 0;
+  			return colorScale(d.total);
+  		})
+
+  		// add a class, styling and mouseover/mouseleave and click functions
+      .style("stroke","black")
+      .style("stroke-width",0.25)
+  		.attr("class", function(d) {
+  			return "Country"
+  		})
+  		.attr("id", function(d) {
+  			return d.id
+  		})
+      .style("opacity", 1)
+  		.on("mouseover", mouseOver)
+  		.on("mouseleave", mouseLeave);
+
+    world=svg.append("text")
+        .attr("x",400)
+        .attr("y", 448)
+        .attr("text-anchor", "middle")
+        .attr("font-family", "Arial")
+        .style("font-size", "14px")
+        .text("Source: An investigation using data from the Committee to Protect Journalists (13 May 2022) | Created using D3");
+  }
+
+
+  </script>
+</body>
+</html>
